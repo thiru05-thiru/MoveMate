@@ -17,6 +17,10 @@ class User(db.Model):
 
     role = db.Column(db.String(20), nullable=False, default="customer")
 
+    # 2FA Fields
+    otp_code = db.Column(db.String(6), nullable=True)
+    otp_expiry = db.Column(db.DateTime, nullable=True)
+
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
     def set_password(self, password):

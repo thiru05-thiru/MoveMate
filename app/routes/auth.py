@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token
 from app.models.user import User
 from extensions import db
+from app.services.email_service import send_otp_email
+from datetime import datetime
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -25,12 +27,19 @@ def register():
     role = data.get("role", "customer")
 
     # Check if email already exists
-    existing_user = User.query.filter_by(email=email).first()
-
-    if existing_user:
+    existing_email = User.query.filter_by(email=email).first()
+    if existing_email:
         return jsonify({
             "success": False,
             "message": "Email already registered"
+        }), 400
+
+    # Check if phone already exists
+    existing_phone = User.query.filter_by(phone=phone).first()
+    if existing_phone:
+        return jsonify({
+            "success": False,
+            "message": "Phone number already registered"
         }), 400
 
     # Create new user
@@ -78,6 +87,44 @@ def login():
             "success": False,
             "message": "Invalid email or password"
         }), 401
+
+    # Trigger 2FA
+    success, error = send_otp_email(user)
+
+    if not success:
+        return jsonify({
+            "success": False,
+            "message": f"Could not send verification code: {error}"
+        }), 500
+
+    return jsonify({
+        "success": True,
+        "message": "Verification code sent to your email",
+        "two_factor_required": True,
+        "email": user.email
+    }), 200
+
+@auth_bp.route("/verify-otp", methods=["POST"])
+def verify_otp():
+    data = request.get_json()
+    email = data.get("email")
+    otp = data.get("otp")
+
+    if not email or not otp:
+        return jsonify({"success": False, "message": "Email and OTP are required"}), 400
+
+    user = User.query.filter_by(email=email).first()
+
+    if not user or user.otp_code != otp:
+        return jsonify({"success": False, "message": "Invalid verification code"}), 401
+
+    if user.otp_expiry < datetime.utcnow():
+        return jsonify({"success": False, "message": "Verification code has expired"}), 401
+
+    # Clear OTP after successful verification
+    user.otp_code = None
+    user.otp_expiry = None
+    db.session.commit()
 
     access_token = create_access_token(
         identity=str(user.id),

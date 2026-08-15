@@ -62,4 +62,4 @@ backend/
 
 ## 👨‍💻 Author
 
-Developed by **Yuvansankar P**
+Developed by **Thirupathi M**

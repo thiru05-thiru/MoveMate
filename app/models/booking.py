@@ -16,7 +16,7 @@ class Booking(db.Model):
 
     driver_id = db.Column(
         db.Integer,
-        db.ForeignKey("users.id"),
+        db.ForeignKey("drivers.id"),
         nullable=True
     )
 
