@@ -1,107 +1,47 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token
-from app.models.user import User
+from app.models.user import UserHelper
 from extensions import db
 from app.services.email_service import send_otp_email
 from datetime import datetime
 
 auth_bp = Blueprint("auth", __name__)
 
-
-@auth_bp.route("/test")
-def test():
-    return {
-        "message": "Authentication Route Working 🚀"
-    }
-
-
 @auth_bp.route("/register", methods=["POST"])
 def register():
-
     data = request.get_json()
-
-    full_name = data.get("full_name")
     email = data.get("email")
     phone = data.get("phone")
-    password = data.get("password")
-    role = data.get("role", "customer")
 
-    # Check if email already exists
-    existing_email = User.query.filter_by(email=email).first()
-    if existing_email:
-        return jsonify({
-            "success": False,
-            "message": "Email already registered"
-        }), 400
+    if UserHelper.get_by_email(email):
+        return jsonify({"success": False, "message": "Email already registered"}), 400
 
-    # Check if phone already exists
-    existing_phone = User.query.filter_by(phone=phone).first()
-    if existing_phone:
-        return jsonify({
-            "success": False,
-            "message": "Phone number already registered"
-        }), 400
+    if UserHelper.get_by_phone(phone):
+        return jsonify({"success": False, "message": "Phone number already registered"}), 400
 
-    # Create new user
-    user = User(
-        full_name=full_name,
-        email=email,
-        phone=phone,
-        role=role
-    )
-
-    user.set_password(password)
-
-    db.session.add(user)
-    db.session.commit()
-
-    return jsonify({
-        "success": True,
-        "message": "User registered successfully"
-    }), 201
+    user = UserHelper.create_user(data)
+    return jsonify({"success": True, "message": "User registered successfully"}), 201
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
-
     data = request.get_json()
-
     email = data.get("email")
     password = data.get("password")
 
-    if not email or not password:
-        return jsonify({
-            "success": False,
-            "message": "Email and password are required"
-        }), 400
+    user = UserHelper.get_by_email(email)
+    if not user or not UserHelper.verify_password(user['password'], password):
+        return jsonify({"success": False, "message": "Invalid email or password"}), 401
 
-    user = User.query.filter_by(email=email).first()
-
-    if not user:
-        return jsonify({
-            "success": False,
-            "message": "Invalid email or password"
-        }), 401
-
-    if not user.check_password(password):
-        return jsonify({
-            "success": False,
-            "message": "Invalid email or password"
-        }), 401
-
-    # Trigger 2FA
+    # In MongoDB version, we pass user dict to email service
     success, error = send_otp_email(user)
-
     if not success:
-        return jsonify({
-            "success": False,
-            "message": f"Could not send verification code: {error}"
-        }), 500
+        return jsonify({"success": False, "message": f"Verification error: {error}"}), 500
 
     return jsonify({
         "success": True,
-        "message": "Verification code sent to your email",
+        "message": "OTP sent",
         "two_factor_required": True,
-        "email": user.email
+        "email": email
     }), 200
 
 @auth_bp.route("/verify-otp", methods=["POST"])
@@ -110,38 +50,28 @@ def verify_otp():
     email = data.get("email")
     otp = data.get("otp")
 
-    if not email or not otp:
-        return jsonify({"success": False, "message": "Email and OTP are required"}), 400
+    user = UserHelper.get_by_email(email)
+    if not user or user.get('otp_code') != otp:
+        return jsonify({"success": False, "message": "Invalid code"}), 401
 
-    user = User.query.filter_by(email=email).first()
+    if user['otp_expiry'] < datetime.utcnow():
+        return jsonify({"success": False, "message": "Code expired"}), 401
 
-    if not user or user.otp_code != otp:
-        return jsonify({"success": False, "message": "Invalid verification code"}), 401
-
-    if user.otp_expiry < datetime.utcnow():
-        return jsonify({"success": False, "message": "Verification code has expired"}), 401
-
-    # Clear OTP after successful verification
-    user.otp_code = None
-    user.otp_expiry = None
-    db.session.commit()
+    # Clear OTP
+    db.users.update_one({"email": email}, {"$set": {"otp_code": None, "otp_expiry": None}})
 
     access_token = create_access_token(
-        identity=str(user.id),
-        additional_claims={
-            "role": user.role
-        }
+        identity=user['_id'],
+        additional_claims={"role": user['role']}
     )
 
     return jsonify({
         "success": True,
-        "message": "Login successful",
         "token": access_token,
         "user": {
-            "id": user.id,
-            "full_name": user.full_name,
-            "email": user.email,
-            "phone": user.phone,
-            "role": user.role
+            "id": user['_id'],
+            "full_name": user['full_name'],
+            "email": user['email'],
+            "role": user['role']
         }
     }), 200

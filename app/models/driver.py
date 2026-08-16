@@ -1,34 +1,45 @@
-from app import db
+from extensions import db
 from datetime import datetime
+from bson import ObjectId
 
-class Driver(db.Model):
-    __tablename__ = "drivers"
+class DriverHelper:
+    @staticmethod
+    def create_driver(user_id, data):
+        driver_doc = {
+            "user_id": user_id,
+            "license_number": data['license_number'],
+            "aadhaar_number": data['aadhaar_number'],
+            "pan_number": data.get('pan_number'),
+            "status": "Pending",
+            "verification_status": "Pending",
+            "is_online": False,
+            "latitude": None,
+            "longitude": None,
+            "rating": 5.0,
+            "total_trips": 0,
+            "created_at": datetime.utcnow()
+        }
+        result = db.drivers.insert_one(driver_doc)
 
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False)
+        # Create Vehicle
+        vehicle_doc = {
+            "driver_id": str(result.inserted_id),
+            "vehicle_type": data['vehicle_type'],
+            "vehicle_number": data['vehicle_number'],
+            "brand": data.get('brand'),
+            "model": data.get('model'),
+            "max_weight": data.get('max_weight'),
+            "rc_number": data.get('rc_number'),
+            "status": "Available",
+            "created_at": datetime.utcnow()
+        }
+        db.vehicles.insert_one(vehicle_doc)
 
-    # Identification Documents
-    license_number = db.Column(db.String(50), unique=True, nullable=False)
-    aadhaar_number = db.Column(db.String(20), unique=True, nullable=False)
-    pan_number = db.Column(db.String(20), unique=True, nullable=True) # New
+        return str(result.inserted_id)
 
-    status = db.Column(db.String(20), default="Pending") # Pending, Approved, Suspended
-    verification_status = db.Column(db.String(20), default="Pending") # New: Pending, Verified, Rejected
-
-    is_online = db.Column(db.Boolean, default=False)
-    latitude = db.Column(db.Float)
-    longitude = db.Column(db.Float)
-
-    rating = db.Column(db.Float, default=5.0)
-    total_trips = db.Column(db.Integer, default=0)
-
-    # Document Images (URLs/Paths)
-    profile_photo = db.Column(db.String(255))
-    license_image = db.Column(db.String(255))
-    aadhaar_image = db.Column(db.String(255))
-    pan_image = db.Column(db.String(255)) # New
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    # Relationships
-    vehicle = db.relationship("Vehicle", backref="driver", uselist=False, cascade="all, delete-orphan")
+    @staticmethod
+    def get_by_user_id(user_id):
+        driver = db.drivers.find_one({"user_id": user_id})
+        if driver:
+            driver['_id'] = str(driver['_id'])
+        return driver

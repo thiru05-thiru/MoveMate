@@ -1,30 +1,42 @@
-from extensions import db
 from werkzeug.security import generate_password_hash, check_password_hash
+from extensions import db
+from datetime import datetime
 
+class UserHelper:
+    """
+    Utility class for User operations in MongoDB
+    """
+    @staticmethod
+    def create_user(data):
+        hashed_password = generate_password_hash(data['password'])
+        user_doc = {
+            "full_name": data['full_name'],
+            "email": data['email'],
+            "phone": data['phone'],
+            "password": hashed_password,
+            "role": data.get('role', 'customer'),
+            "otp_code": None,
+            "otp_expiry": None,
+            "created_at": datetime.utcnow()
+        }
+        result = db.users.insert_one(user_doc)
+        user_doc['_id'] = str(result.inserted_id)
+        return user_doc
 
-class User(db.Model):
-    __tablename__ = "users"
+    @staticmethod
+    def get_by_email(email):
+        user = db.users.find_one({"email": email})
+        if user:
+            user['_id'] = str(user['_id'])
+        return user
 
-    id = db.Column(db.Integer, primary_key=True)
+    @staticmethod
+    def get_by_phone(phone):
+        user = db.users.find_one({"phone": phone})
+        if user:
+            user['_id'] = str(user['_id'])
+        return user
 
-    full_name = db.Column(db.String(100), nullable=False)
-
-    email = db.Column(db.String(120), unique=True, nullable=False)
-
-    phone = db.Column(db.String(15), unique=True)
-
-    password = db.Column(db.String(255), nullable=False)
-
-    role = db.Column(db.String(20), nullable=False, default="customer")
-
-    # 2FA Fields
-    otp_code = db.Column(db.String(6), nullable=True)
-    otp_expiry = db.Column(db.DateTime, nullable=True)
-
-    created_at = db.Column(db.DateTime, server_default=db.func.now())
-
-    def set_password(self, password):
-        self.password = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password, password)
+    @staticmethod
+    def verify_password(stored_password, provided_password):
+        return check_password_hash(stored_password, provided_password)
