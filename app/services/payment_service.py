@@ -2,8 +2,8 @@ import razorpay
 import os
 import logging
 from extensions import db
-from app.models.payment import Payment
-from app.models.booking import Booking
+from app.models.payment import PaymentHelper
+from app.models.booking import BookingHelper
 
 # Set up logging to track backend errors
 logging.basicConfig(level=logging.INFO)
@@ -44,17 +44,13 @@ def create_razorpay_order(booking_id, amount):
         platform_fee = amount * 0.30
         driver_share = amount * 0.70
 
-        payment = Payment(
+        PaymentHelper.create(
             booking_id=booking_id,
-            razorpay_order_id=order['id'],
+            order_id=order['id'],
             amount=amount,
             platform_fee=platform_fee,
-            driver_share=driver_share,
-            status="Pending"
+            driver_share=driver_share
         )
-
-        db.session.add(payment)
-        db.session.commit()
 
         return {
             "order_id": order['id'],
@@ -77,17 +73,16 @@ def verify_payment(razorpay_order_id, razorpay_payment_id, razorpay_signature):
 
         client.utility.verify_payment_signature(params_dict)
 
-        payment = Payment.query.filter_by(razorpay_order_id=razorpay_order_id).first()
+        payment = PaymentHelper.get_by_order_id(razorpay_order_id)
         if payment:
-            payment.razorpay_payment_id = razorpay_payment_id
-            payment.razorpay_signature = razorpay_signature
-            payment.status = "Captured"
+            PaymentHelper.update_status(razorpay_order_id, razorpay_payment_id, razorpay_signature, "Captured")
 
-            booking = Booking.query.filter_by(booking_id=payment.booking_id).first()
-            if booking:
-                booking.status = "Paid"
+            # Update booking status
+            db.bookings.update_one(
+                {"booking_id": payment['booking_id']},
+                {"$set": {"status": "Paid", "updated_at": datetime.utcnow()}}
+            )
 
-            db.session.commit()
             return True, "Payment verified successfully"
 
         return False, "Internal payment record missing"
@@ -95,3 +90,5 @@ def verify_payment(razorpay_order_id, razorpay_payment_id, razorpay_signature):
     except Exception as e:
         logger.error(f"Verification Error: {str(e)}")
         return False, f"Verification Failed: {str(e)}"
+
+from datetime import datetime # Added import for verify_payment

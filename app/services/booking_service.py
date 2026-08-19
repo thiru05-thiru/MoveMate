@@ -1,271 +1,178 @@
 from datetime import datetime
-
 from extensions import db
-from app.models.booking import Booking
-from app.models.driver import Driver
-from app.models.user import User
+from app.models.booking import BookingHelper
 from app.services.driver_service import find_nearest_driver
-from app.models.vehicle import Vehicle
-
-
-def generate_booking_id():
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    return f"MM{timestamp}"
-
+from bson import ObjectId
 
 def create_booking(customer_id, data):
-
     # Find nearest driver
     nearest_driver = find_nearest_driver(
         pickup_latitude=data["pickup_lat"],
         pickup_longitude=data["pickup_lng"]
     )
 
-    booking = Booking(
-        booking_id=generate_booking_id(),
-        customer_id=customer_id,
-
-        pickup_address=data["pickup_address"],
-        destination_address=data["destination_address"],
-
-        pickup_lat=data["pickup_lat"],
-        pickup_lng=data["pickup_lng"],
-
-        destination_lat=data["destination_lat"],
-        destination_lng=data["destination_lng"],
-
-        vehicle_type=data["vehicle_type"],
-        goods_type=data["goods_type"],
-        estimated_weight=data["estimated_weight"]
-    )
-
-    # Driver found
-    if nearest_driver:
-
-        booking.driver_id = nearest_driver["driver_id"]
-        booking.vehicle_id = nearest_driver["vehicle_id"]
-        booking.status = "Driver Assigned"
-
-    else:
-
-        booking.status = "Waiting for Driver"
-
-    db.session.add(booking)
-    db.session.commit()
-
+    booking = BookingHelper.create(customer_id, data, nearest_driver)
     return booking
 
 
 def get_customer_bookings(customer_id):
-    return Booking.query.filter_by(
-        customer_id=customer_id
-    ).order_by(
-        Booking.created_at.desc()
-    ).all()
+    return BookingHelper.get_customer_bookings(customer_id)
 
 def get_driver_bookings(driver_user_id):
     """
     Returns all bookings assigned to the logged-in driver.
     """
-
-    from app.models.driver import Driver
-
-    driver = Driver.query.filter_by(
-        user_id=driver_user_id
-    ).first()
-
+    driver = db.drivers.find_one({"user_id": driver_user_id})
     if not driver:
         return []
 
-    bookings = Booking.query.filter_by(
-        driver_id=driver.id
-    ).order_by(
-        Booking.created_at.desc()
-    ).all()
+    bookings = list(db.bookings.find({"driver_id": str(driver['_id'])}).sort("created_at", -1))
 
-    return bookings
+    booking_list = []
+    for b in bookings:
+        b['_id'] = str(b['_id'])
+        b['created_at'] = b['created_at'].strftime("%Y-%m-%d %H:%M:%S") if isinstance(b['created_at'], datetime) else b['created_at']
+        booking_list.append(b)
+
+    return booking_list
 
 def get_booking_by_id(customer_id, booking_id):
-    booking = Booking.query.filter_by(
-        booking_id=booking_id,
-        customer_id=customer_id
-    ).first()
-
+    booking = db.bookings.find_one({
+        "booking_id": booking_id,
+        "customer_id": customer_id
+    })
+    if booking:
+        booking['_id'] = str(booking['_id'])
     return booking
 
 def get_tracking_details(booking_id):
-    """
-    Returns tracking information for a booking.
-    """
-
-    booking = Booking.query.filter_by(
-        booking_id=booking_id
-    ).first()
-
+    booking = db.bookings.find_one({"booking_id": booking_id})
     if not booking:
         return None
 
     response = {
-        "booking_id": booking.booking_id,
-        "status": booking.status,
-
-        "pickup_address": booking.pickup_address,
-        "destination_address": booking.destination_address,
-
-        # Pickup Coordinates
-        "pickup_lat": booking.pickup_lat,
-        "pickup_lng": booking.pickup_lng,
-
-        # Destination Coordinates
-        "destination_lat": booking.destination_lat,
-        "destination_lng": booking.destination_lng,
-
+        "booking_id": booking['booking_id'],
+        "status": booking['status'],
+        "pickup_address": booking['pickup_address'],
+        "destination_address": booking['destination_address'],
+        "pickup_lat": booking['pickup_lat'],
+        "pickup_lng": booking['pickup_lng'],
+        "destination_lat": booking['destination_lat'],
+        "destination_lng": booking['destination_lng'],
         "driver": None,
         "vehicle": None,
         "driver_location": None,
     }
 
-    if booking.driver_id:
-
-        driver = Driver.query.filter_by(
-            id=booking.driver_id
-        ).first()
-
+    if booking.get('driver_id'):
+        driver = db.drivers.find_one({"_id": ObjectId(booking['driver_id'])})
         if driver:
-
-            user = User.query.filter_by(
-                id=driver.user_id
-            ).first()
-
-            vehicle = Vehicle.query.filter_by(
-                id=booking.vehicle_id
-            ).first()
+            user = db.users.find_one({"_id": ObjectId(driver['user_id'])})
+            vehicle = db.vehicles.find_one({"_id": ObjectId(booking['vehicle_id'])})
 
             response["driver"] = {
-                "name": user.full_name if user else "",
-                "phone": user.phone if user else "",
+                "name": user['full_name'] if user else "Unknown",
+                "phone": user['phone'] if user else "",
             }
 
             if vehicle:
                 response["vehicle"] = {
-                    "type": vehicle.vehicle_type,
-                    "number": vehicle.vehicle_number,
+                    "type": vehicle['vehicle_type'],
+                    "number": vehicle['vehicle_number'],
                 }
 
             response["driver_location"] = {
-                "latitude": driver.latitude,
-                "longitude": driver.longitude,
+                "latitude": driver.get('latitude'),
+                "longitude": driver.get('longitude'),
             }
 
     return response
 
 def cancel_booking(customer_id, booking_id):
-    booking = Booking.query.filter_by(
-        booking_id=booking_id,
-        customer_id=customer_id
-    ).first()
+    booking = db.bookings.find_one({
+        "booking_id": booking_id,
+        "customer_id": customer_id
+    })
 
-    if booking is None:
+    if not booking:
         return None
 
-    # Don't allow cancelling a completed booking
-    if booking.status == "Delivered":
+    if booking['status'] == "Delivered":
         return "DELIVERED"
 
-    booking.status = "Cancelled"
+    db.bookings.update_one(
+        {"booking_id": booking_id},
+        {"$set": {"status": "Cancelled", "updated_at": datetime.utcnow()}}
+    )
 
-    db.session.commit()
-
-    return booking
+    return {"status": "Cancelled"}
 
 def accept_booking(driver_user_id, booking_id):
-    """
-    Driver accepts an assigned booking.
-    """
-
-    from app.models.driver import Driver
-
-    print("JWT User ID:", driver_user_id)
-
-    driver = Driver.query.filter_by(user_id=driver_user_id).first()
-
-    print("Driver:", driver)
-
+    driver = db.drivers.find_one({"user_id": driver_user_id})
     if not driver:
         return None, "Driver not found."
 
-    booking = Booking.query.filter_by(
-        booking_id=booking_id,
-        driver_id=driver.id
-    ).first()
+    booking = db.bookings.find_one({
+        "booking_id": booking_id,
+        "driver_id": str(driver['_id'])
+    })
 
     if not booking:
         return None, "Booking not found."
 
-    if booking.status != "Driver Assigned":
-        return None, f"Booking cannot be accepted. Current status: {booking.status}"
+    if booking['status'] != "Driver Assigned":
+        return None, f"Booking cannot be accepted. Current status: {booking['status']}"
 
-    booking.status = "Accepted"
+    db.bookings.update_one(
+        {"booking_id": booking_id},
+        {"$set": {"status": "Accepted", "updated_at": datetime.utcnow()}}
+    )
 
-    db.session.commit()
-
-    return booking, None
+    return {"booking_id": booking_id, "status": "Accepted"}, None
 
 
 def start_trip(driver_user_id, booking_id):
-    """
-    Driver starts the trip.
-    """
-
-    from app.models.driver import Driver
-
-    driver = Driver.query.filter_by(user_id=driver_user_id).first()
-
+    driver = db.drivers.find_one({"user_id": driver_user_id})
     if not driver:
         return None, "Driver not found."
 
-    booking = Booking.query.filter_by(
-        booking_id=booking_id,
-        driver_id=driver.id
-    ).first()
+    booking = db.bookings.find_one({
+        "booking_id": booking_id,
+        "driver_id": str(driver['_id'])
+    })
 
     if not booking:
         return None, "Booking not found."
 
-    if booking.status != "Accepted":
-        return None, f"Trip cannot be started. Current status: {booking.status}"
+    if booking['status'] != "Accepted":
+        return None, f"Trip cannot be started. Current status: {booking['status']}"
 
-    booking.status = "In Transit"
+    db.bookings.update_one(
+        {"booking_id": booking_id},
+        {"$set": {"status": "In Transit", "updated_at": datetime.utcnow()}}
+    )
 
-    db.session.commit()
-
-    return booking, None
+    return {"booking_id": booking_id, "status": "In Transit"}, None
 
 def deliver_trip(driver_user_id, booking_id):
-    """
-    Driver marks the trip as delivered.
-    """
-
-    from app.models.driver import Driver
-
-    driver = Driver.query.filter_by(user_id=driver_user_id).first()
-
+    driver = db.drivers.find_one({"user_id": driver_user_id})
     if not driver:
         return None, "Driver not found."
 
-    booking = Booking.query.filter_by(
-        booking_id=booking_id,
-        driver_id=driver.id
-    ).first()
+    booking = db.bookings.find_one({
+        "booking_id": booking_id,
+        "driver_id": str(driver['_id'])
+    })
 
     if not booking:
         return None, "Booking not found."
 
-    if booking.status != "In Transit":
-        return None, f"Trip cannot be delivered. Current status: {booking.status}"
+    if booking['status'] != "In Transit":
+        return None, f"Trip cannot be delivered. Current status: {booking['status']}"
 
-    booking.status = "Delivered"
+    db.bookings.update_one(
+        {"booking_id": booking_id},
+        {"$set": {"status": "Delivered", "updated_at": datetime.utcnow()}}
+    )
 
-    db.session.commit()
-
-    return booking, None
+    return {"booking_id": booking_id, "status": "Delivered"}, None
