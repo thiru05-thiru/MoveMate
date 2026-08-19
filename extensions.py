@@ -17,13 +17,15 @@ def init_mongodb(app):
     global mongo_client, db
     uri = os.getenv("MONGODB_URI")
     if not uri:
-        print("CRITICAL: MONGODB_URI not found in environment!")
+        print("CRITICAL ERROR: MONGODB_URI not found in environment!")
         return
 
     try:
+        print(f"Connecting to MongoDB with URI: {uri[:20]}...")
         mongo_client = MongoClient(uri)
-        # Using the default database provided in Atlas or fallback
+        # Force a connection check
+        mongo_client.admin.command('ping')
         db = mongo_client.get_default_database("movemate_db")
-        print(f"Connected to MongoDB Atlas ✅")
+        print(f"Connection Successful! Active DB: {db.name} ✅")
     except Exception as e:
-        print(f"Failed to connect to MongoDB: {e} ❌")
+        print(f"DATABASE CONNECTION FAILED: {str(e)} ❌")
