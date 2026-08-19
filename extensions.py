@@ -21,8 +21,13 @@ def init_mongodb(app):
         return
 
     try:
-        print(f"Connecting to MongoDB with URI: {uri[:20]}...")
-        mongo_client = MongoClient(uri)
+        # Added tlsAllowInvalidCertificates for environments with strict SSL (use with caution)
+        # Added serverSelectionTimeoutMS to prevent long hangs
+        mongo_client = MongoClient(
+            uri,
+            serverSelectionTimeoutMS=5000,
+            tlsAllowInvalidCertificates=True
+        )
         # Force a connection check
         mongo_client.admin.command('ping')
         db = mongo_client.get_default_database("movemate_db")
