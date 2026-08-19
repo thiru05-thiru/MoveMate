@@ -21,16 +21,18 @@ def init_mongodb(app):
         return
 
     try:
-        # Added tlsAllowInvalidCertificates for environments with strict SSL (use with caution)
-        # Added serverSelectionTimeoutMS to prevent long hangs
-        mongo_client = MongoClient(
-            uri,
-            serverSelectionTimeoutMS=5000,
-            tlsAllowInvalidCertificates=True
-        )
-        # Force a connection check
+        # Use simple initialization for better compatibility with cloud providers
+        mongo_client = MongoClient(uri, serverSelectionTimeoutMS=10000)
+
+        # Ping the server to verify connection
         mongo_client.admin.command('ping')
-        db = mongo_client.get_default_database("movemate_db")
-        print(f"Connection Successful! Active DB: {db.name} ✅")
+
+        # Attempt to get database from URI, or fallback to default
+        try:
+            db = mongo_client.get_default_database()
+        except:
+            db = mongo_client["movemate_db"]
+
+        print(f"CONNECTED TO MONGODB ATLAS ✅ (DB: {db.name})")
     except Exception as e:
         print(f"DATABASE CONNECTION FAILED: {str(e)} ❌")
