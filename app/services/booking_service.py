@@ -6,11 +6,16 @@ from bson import ObjectId
 
 def create_booking(customer_id, data):
     # Find nearest driver
-    nearest_driver = find_nearest_driver(
-        pickup_latitude=data["pickup_lat"],
-        pickup_longitude=data["pickup_lng"]
-    )
+    nearest_driver = None
+    try:
+        nearest_driver = find_nearest_driver(
+            pickup_latitude=data["pickup_lat"],
+            pickup_longitude=data["pickup_lng"]
+        )
+    except Exception as e:
+        print(f"Nearest driver search failed: {e}")
 
+    # Create the booking document
     booking = BookingHelper.create(customer_id, data, nearest_driver)
     return booking
 
