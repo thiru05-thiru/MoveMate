@@ -7,9 +7,10 @@ import os
 # Initialize Extensions
 jwt = JWTManager()
 mail = Mail()
-cors = CORS(resources={r"/api/*": {"origins": "*"}})
+# We define CORS but we'll apply it fully in __init__.py
+cors = CORS()
 
-# MongoDB Proxy to handle rebinding during app initialization
+# MongoDB Proxy to handle cloud connection state
 class MongoDBProxy:
     def __init__(self):
         self._db = None
@@ -17,40 +18,38 @@ class MongoDBProxy:
 
     def __getattr__(self, name):
         if self._db is None:
-            # Fallback for early access if needed, though init_mongodb should run first
-            raise RuntimeError("Database not initialized. Call init_mongodb first.")
+            raise RuntimeError("Database connection not ready. Check MONGODB_URI.")
         return getattr(self._db, name)
 
     def set_db(self, database):
         self._db = database
 
-# Global database object used across the app
 db = MongoDBProxy()
 
 def init_mongodb(app):
     uri = os.getenv("MONGODB_URI")
     if not uri:
-        print("CRITICAL ERROR: MONGODB_URI not found!")
+        print("CRITICAL: MONGODB_URI missing!")
         return
 
     try:
+        # Optimized connection for Render and Atlas
         client = MongoClient(
             uri,
-            serverSelectionTimeoutMS=10000,
+            serverSelectionTimeoutMS=15000,
+            connectTimeoutMS=15000,
+            socketTimeoutMS=15000,
             tlsAllowInvalidCertificates=True
         )
-        # Verify connection
+        # Verify connection immediately
         client.admin.command('ping')
 
-        # Set the global proxy database
-        try:
-            database = client.get_default_database()
-        except:
-            database = client["movemate_db"]
+        # Get DB name from URI or fallback
+        database = client.get_default_database("movemate_db")
 
         db.client = client
         db.set_db(database)
 
-        print(f"CONNECTED TO MONGODB ATLAS ✅ (DB: {database.name})")
+        print(f"✅ MONGODB CONNECTED: {database.name}")
     except Exception as e:
-        print(f"DATABASE CONNECTION FAILED: {str(e)} ❌")
+        print(f"❌ MONGODB ERROR: {str(e)}")
