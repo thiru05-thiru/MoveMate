@@ -9,30 +9,48 @@ jwt = JWTManager()
 mail = Mail()
 cors = CORS(resources={r"/api/*": {"origins": "*"}})
 
-# MongoDB Global State
-mongo_client = None
-db = None
+# MongoDB Proxy to handle rebinding during app initialization
+class MongoDBProxy:
+    def __init__(self):
+        self._db = None
+        self.client = None
+
+    def __getattr__(self, name):
+        if self._db is None:
+            # Fallback for early access if needed, though init_mongodb should run first
+            raise RuntimeError("Database not initialized. Call init_mongodb first.")
+        return getattr(self._db, name)
+
+    def set_db(self, database):
+        self._db = database
+
+# Global database object used across the app
+db = MongoDBProxy()
 
 def init_mongodb(app):
-    global mongo_client, db
     uri = os.getenv("MONGODB_URI")
     if not uri:
-        print("CRITICAL ERROR: MONGODB_URI not found in environment!")
+        print("CRITICAL ERROR: MONGODB_URI not found!")
         return
 
     try:
-        # Use simple initialization for better compatibility with cloud providers
-        mongo_client = MongoClient(uri, serverSelectionTimeoutMS=10000)
+        client = MongoClient(
+            uri,
+            serverSelectionTimeoutMS=10000,
+            tlsAllowInvalidCertificates=True
+        )
+        # Verify connection
+        client.admin.command('ping')
 
-        # Ping the server to verify connection
-        mongo_client.admin.command('ping')
-
-        # Attempt to get database from URI, or fallback to default
+        # Set the global proxy database
         try:
-            db = mongo_client.get_default_database()
+            database = client.get_default_database()
         except:
-            db = mongo_client["movemate_db"]
+            database = client["movemate_db"]
 
-        print(f"CONNECTED TO MONGODB ATLAS ✅ (DB: {db.name})")
+        db.client = client
+        db.set_db(database)
+
+        print(f"CONNECTED TO MONGODB ATLAS ✅ (DB: {database.name})")
     except Exception as e:
         print(f"DATABASE CONNECTION FAILED: {str(e)} ❌")
