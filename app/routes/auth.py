@@ -50,24 +50,15 @@ def login():
 
     # Trigger 2FA
     success, error = send_otp_email(user)
-    if not success:
-        # Provide more specific error message if it's an SMTP issue
-        error_msg = f"Verification service unavailable. Please try again later."
-        if "Authentication failed" in str(error):
-            error_msg = "Mail server authentication failed. Please check server configuration."
 
-        print(f"OTP SEND ERROR: {error}")
-        return jsonify({
-            "success": False,
-            "message": error_msg,
-            "dev_detail": str(error) if not request.host.startswith('movemate') else None
-        }), 500
-
+    # We now always succeed the request to move to the OTP screen,
+    # even if mail failed (we log the code in Rescue Mode)
     return jsonify({
         "success": True,
-        "message": "OTP sent",
+        "message": "OTP processed",
         "two_factor_required": True,
-        "email": email
+        "email": email,
+        "status": "sent" if not error else "rescue_mode"
     }), 200
 
 @auth_bp.route("/verify-otp", methods=["POST"])
