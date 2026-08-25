@@ -11,9 +11,8 @@ def create_app():
     jwt.init_app(app)
     mail.init_app(app)
 
-    # Robust CORS implementation
-    from flask_cors import CORS
-    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
+    # Simple & robust CORS for JWT architecture
+    cors.init_app(app, resources={r"/*": {"origins": "*"}})
 
     @app.after_request
     def add_cors_headers(response):
