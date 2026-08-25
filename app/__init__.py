@@ -11,8 +11,16 @@ def create_app():
     jwt.init_app(app)
     mail.init_app(app)
 
-    # Configure CORS - Simplified for JWT usage (more reliable for Render/Vercel)
-    cors.init_app(app, resources={r"/api/*": {"origins": "*"}})
+    # Robust CORS implementation
+    from flask_cors import CORS
+    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
+
+    @app.after_request
+    def add_cors_headers(response):
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS")
+        return response
 
     # Initialize MongoDB
     with app.app_context():
