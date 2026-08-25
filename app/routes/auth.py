@@ -32,18 +32,36 @@ def login():
     email = data.get("email", "").strip().lower()
     password = data.get("password")
 
+    print(f"LOGIN ATTEMPT: {email}")
+
     if not email or not password:
         return jsonify({"success": False, "message": "Email and password required"}), 400
 
     user = UserHelper.get_by_email(email)
-    if not user or not UserHelper.verify_password(user['password'], password):
+    if not user:
+        print(f"LOGIN FAILED: User {email} not found")
         return jsonify({"success": False, "message": "Invalid email or password"}), 401
+
+    if not UserHelper.verify_password(user['password'], password):
+        print(f"LOGIN FAILED: Incorrect password for {email}")
+        return jsonify({"success": False, "message": "Invalid email or password"}), 401
+
+    print(f"LOGIN SUCCESS: Password verified for {email}. Sending OTP...")
 
     # Trigger 2FA
     success, error = send_otp_email(user)
     if not success:
-        print(f"SMTP Error: {error}")
-        return jsonify({"success": False, "message": f"Verification error: {error}"}), 500
+        # Provide more specific error message if it's an SMTP issue
+        error_msg = f"Verification service unavailable. Please try again later."
+        if "Authentication failed" in str(error):
+            error_msg = "Mail server authentication failed. Please check server configuration."
+
+        print(f"OTP SEND ERROR: {error}")
+        return jsonify({
+            "success": False,
+            "message": error_msg,
+            "dev_detail": str(error) if not request.host.startswith('movemate') else None
+        }), 500
 
     return jsonify({
         "success": True,

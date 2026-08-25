@@ -7,9 +7,12 @@ class DriverHelper:
     def create_driver(user_id, data):
         driver_doc = {
             "user_id": user_id,
-            "license_number": data['license_number'],
-            "aadhaar_number": data['aadhaar_number'],
+            "license_number": data.get('license_number'),
+            "aadhaar_number": data.get('aadhaar_number'),
             "pan_number": data.get('pan_number'),
+            "license_proof": data.get('license_proof'),
+            "aadhaar_proof": data.get('aadhaar_proof'),
+            "pan_proof": data.get('pan_proof'),
             "status": "Pending",
             "verification_status": "Pending",
             "is_online": False,
@@ -24,12 +27,16 @@ class DriverHelper:
         # Create Vehicle
         vehicle_doc = {
             "driver_id": str(result.inserted_id),
-            "vehicle_type": data['vehicle_type'],
-            "vehicle_number": data['vehicle_number'],
+            "vehicle_type": data.get('vehicle_type'),
+            "vehicle_number": data.get('vehicle_number'),
             "brand": data.get('brand'),
             "model": data.get('model'),
             "max_weight": data.get('max_weight'),
             "rc_number": data.get('rc_number'),
+            "insurance_number": data.get('insurance_number'),
+            "fc_expiry": data.get('fc_expiry'),
+            "rc_proof": data.get('rc_proof'),
+            "insurance_proof": data.get('insurance_proof'),
             "status": "Available",
             "created_at": datetime.utcnow()
         }

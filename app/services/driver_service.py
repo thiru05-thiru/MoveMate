@@ -116,6 +116,7 @@ def get_available_drivers():
             "driver_id": str(driver['_id']),
             "user_id": driver['user_id'],
             "vehicle_id": str(vehicle['_id']) if vehicle else None,
+            "vehicle_type": vehicle['vehicle_type'] if vehicle else None,
             "latitude": driver['latitude'],
             "longitude": driver['longitude'],
             "status": driver['status']
@@ -126,8 +127,12 @@ def get_available_drivers():
 # Find Nearest Driver
 # =====================================
 
-def find_nearest_driver(pickup_latitude, pickup_longitude):
+def find_nearest_driver(pickup_latitude, pickup_longitude, vehicle_type=None):
     drivers = get_available_drivers()
+
+    if vehicle_type:
+        drivers = [d for d in drivers if d.get('vehicle_type') == vehicle_type]
+
     if not drivers:
         return None
 

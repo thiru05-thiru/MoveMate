@@ -26,7 +26,7 @@ def register():
 
     data = request.get_json()
 
-    user_id = int(get_jwt_identity())
+    user_id = get_jwt_identity()
 
     result, error = register_driver(
         user_id=user_id,
@@ -62,7 +62,7 @@ def register():
 @jwt_required()
 def driver_go_online():
 
-    user_id = int(get_jwt_identity())
+    user_id = get_jwt_identity()
 
     result, error = go_online(user_id)
 
@@ -87,7 +87,7 @@ def driver_go_online():
 @jwt_required()
 def driver_go_offline():
 
-    user_id = int(get_jwt_identity())
+    user_id = get_jwt_identity()
 
     result, error = go_offline(user_id)
 
@@ -112,7 +112,7 @@ def driver_go_offline():
 @jwt_required()
 def driver_status():
 
-    user_id = int(get_jwt_identity())
+    user_id = get_jwt_identity()
 
     result, error = get_driver_status(user_id)
 
@@ -137,7 +137,7 @@ def update_location():
 
     data = request.get_json()
 
-    user_id = int(get_jwt_identity())
+    user_id = get_jwt_identity()
 
     result, error = update_driver_location(
         user_id=user_id,
@@ -166,7 +166,7 @@ def update_location():
 @jwt_required()
 def get_location():
 
-    user_id = int(get_jwt_identity())
+    user_id = get_jwt_identity()
 
     result, error = get_driver_location(user_id)
 
@@ -219,7 +219,7 @@ def nearest_driver():
 @jwt_required()
 def driver_jobs():
 
-    user_id = int(get_jwt_identity())
+    user_id = get_jwt_identity()
 
     jobs, error = get_driver_jobs(user_id)
 

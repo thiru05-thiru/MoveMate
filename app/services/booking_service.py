@@ -10,7 +10,8 @@ def create_booking(customer_id, data):
     try:
         nearest_driver = find_nearest_driver(
             pickup_latitude=data["pickup_lat"],
-            pickup_longitude=data["pickup_lng"]
+            pickup_longitude=data["pickup_lng"],
+            vehicle_type=data.get("vehicle_type")
         )
     except Exception as e:
         print(f"Nearest driver search failed: {e}")
@@ -25,13 +26,27 @@ def get_customer_bookings(customer_id):
 
 def get_driver_bookings(driver_user_id):
     """
-    Returns all bookings assigned to the logged-in driver.
+    Returns all bookings assigned to the logged-in driver or broadcasts matching vehicle type.
     """
     driver = db.drivers.find_one({"user_id": driver_user_id})
     if not driver:
         return []
 
-    bookings = list(db.bookings.find({"driver_id": str(driver['_id'])}).sort("created_at", -1))
+    vehicle = db.vehicles.find_one({"driver_id": str(driver['_id'])})
+    vehicle_type = vehicle['vehicle_type'] if vehicle else None
+
+    # Find jobs assigned to this driver OR waiting jobs that match this driver's vehicle
+    query = {
+        "$or": [
+            {"driver_id": str(driver['_id'])},
+            {
+                "status": "Waiting for Driver",
+                "vehicle_type": vehicle_type
+            }
+        ]
+    }
+
+    bookings = list(db.bookings.find(query).sort("created_at", -1))
 
     booking_list = []
     for b in bookings:
@@ -130,10 +145,10 @@ def accept_booking(driver_user_id, booking_id):
 
     db.bookings.update_one(
         {"booking_id": booking_id},
-        {"$set": {"status": "Accepted", "updated_at": datetime.utcnow()}}
+        {"$set": {"status": "Awaiting Payment", "updated_at": datetime.utcnow()}}
     )
 
-    return {"booking_id": booking_id, "status": "Accepted"}, None
+    return {"booking_id": booking_id, "status": "Awaiting Payment"}, None
 
 
 def start_trip(driver_user_id, booking_id):
@@ -149,8 +164,8 @@ def start_trip(driver_user_id, booking_id):
     if not booking:
         return None, "Booking not found."
 
-    if booking['status'] != "Accepted":
-        return None, f"Trip cannot be started. Current status: {booking['status']}"
+    if booking['status'] != "Paid":
+        return None, f"Trip cannot be started. Customer has not paid yet. Current status: {booking['status']}"
 
     db.bookings.update_one(
         {"booking_id": booking_id},
