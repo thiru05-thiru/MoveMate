@@ -13,6 +13,9 @@ def create_app():
 
     # Apply Extensions
     jwt.init_app(app)
+    mail.init_app(app)
+
+    print(f"📧 MAIL SYSTEM: Sender set to {app.config.get('MAIL_DEFAULT_SENDER')}")
 
     @app.after_request
     def add_cors_headers(response):
