@@ -7,12 +7,12 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    # Move CORS to the absolute top of the initialization
+    from flask_cors import CORS
+    CORS(app, resources={r"/*": {"origins": "*"}})
+
     # Apply Extensions
     jwt.init_app(app)
-    mail.init_app(app)
-
-    # Simple & robust CORS for JWT architecture
-    cors.init_app(app, resources={r"/*": {"origins": "*"}})
 
     @app.after_request
     def add_cors_headers(response):
