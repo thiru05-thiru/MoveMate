@@ -61,6 +61,16 @@ def login():
         "status": "sent" if not error else "rescue_mode"
     }), 200
 
+@auth_bp.route("/test-email")
+def test_email():
+    test_user = {"email": "noreplymovemate@gmail.com", "full_name": "MoveMate Admin"}
+    success, error = send_otp_email(test_user)
+    return jsonify({
+        "success": success,
+        "message": "Check Render logs for 'MAIL DELIVERED' status",
+        "error_if_any": error
+    })
+
 @auth_bp.route("/verify-otp", methods=["POST"])
 def verify_otp():
     data = request.get_json()

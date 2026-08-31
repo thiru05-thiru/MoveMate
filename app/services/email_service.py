@@ -1,7 +1,6 @@
 import random
 import logging
 import threading
-import sys
 import socket
 from flask import current_app
 from flask_mail import Message
@@ -9,8 +8,7 @@ from extensions import mail, db
 from datetime import datetime, timedelta
 
 # ====================================================================
-# NETWORK PATCH: Force IPv4 for Render compatibility
-# This fixes "OSError: [Errno 101] Network is unreachable"
+# NETWORK PATCH: Force IPv4 for Render/Gmail compatibility
 # ====================================================================
 orig_getaddrinfo = socket.getaddrinfo
 def getaddrinfo_ipv4(host, port, family=0, type=0, proto=0, flags=0):
@@ -18,7 +16,6 @@ def getaddrinfo_ipv4(host, port, family=0, type=0, proto=0, flags=0):
 socket.getaddrinfo = getaddrinfo_ipv4
 # ====================================================================
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -26,53 +23,43 @@ def generate_otp():
     return str(random.randint(100000, 999999))
 
 def send_async_email(app, msg, recipient, otp):
-    # This runs in a separate thread to prevent gunicorn crashes
-    try:
-        with app.app_context():
-            logger.info(f"Background thread: Starting SMTP send to {recipient}...")
-            # We set a shorter timeout at the socket level if possible,
-            # but mail.send usually respects app configuration
+    with app.app_context():
+        try:
+            logger.info(f"SMTP Thread: Connecting to Gmail for {recipient}...")
             mail.send(msg)
-            logger.info(f"✅ Background thread: MAIL DELIVERED to {recipient}")
-    except BaseException as e:
-        logger.error(f"❌ Background thread: SMTP FAILED for {recipient}: {str(e)}")
-        # Log more details about the error type
-        import traceback
-        traceback.print_exc()
+            logger.info(f"✅ SMTP SUCCESS: Mail sent to {recipient}")
+        except Exception as e:
+            logger.error(f"❌ SMTP FATAL ERROR: {str(e)}")
 
 def send_otp_email(user_doc):
     otp = generate_otp()
     expiry = datetime.utcnow() + timedelta(minutes=5)
     recipient = user_doc.get('email')
 
-    if not recipient:
-        return False, "No email"
+    if not recipient: return False, "No email"
 
     try:
-        # 1. Update MongoDB immediately
+        # 1. Store in DB
         db.users.update_one(
             {"email": recipient},
             {"$set": {"otp_code": otp, "otp_expiry": expiry}}
         )
 
-        # 2. LOG THE CODE IMMEDIATELY for the user to see in Render Logs
-        print(f"🚨 RESCUE MODE: OTP for {recipient} is [{otp}]")
+        # 2. Log for Developer (Rescue Mode stays as a backup)
+        logger.info(f"🔑 OTP GENERATED: {recipient} -> {otp}")
 
-        # 3. Create the message
+        # 3. Prepare Message
         msg = Message(
-            subject="Your MoveMate Verification Code",
+            subject=f"{otp} is your MoveMate verification code",
             recipients=[recipient],
-            body=f"Hello,\n\nYour code is: {otp}\n\nExpires in 5 mins."
+            body=f"Your MoveMate verification code is: {otp}\n\nValid for 5 minutes."
         )
 
-        # 4. Start background thread - DO NOT WAIT for it
+        # 4. Background Delivery
         app = current_app._get_current_object()
-        thread = threading.Thread(target=send_async_email, args=(app, msg, recipient, otp))
-        thread.daemon = True # Ensure it doesn't block server shutdown
-        thread.start()
+        threading.Thread(target=send_async_email, args=(app, msg, recipient, otp)).start()
 
         return True, None
     except Exception as e:
-        logger.error(f"OTP SERVICE ERROR: {str(e)}")
-        # We still return True because the DB update and log above likely succeeded
-        return True, "Rescue fallback active"
+        logger.error(f"SERVICE ERROR: {str(e)}")
+        return True, "Fallback"
