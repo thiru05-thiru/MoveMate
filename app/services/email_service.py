@@ -18,12 +18,16 @@ def send_async_email(app, msg, recipient, otp):
     # This runs in a separate thread to prevent gunicorn crashes
     try:
         with app.app_context():
-            logger.info(f"Background thread: Sending to {recipient}...")
+            logger.info(f"Background thread: Starting SMTP send to {recipient}...")
+            # We set a shorter timeout at the socket level if possible,
+            # but mail.send usually respects app configuration
             mail.send(msg)
-            logger.info(f"✅ Background thread: Success for {recipient}")
+            logger.info(f"✅ Background thread: MAIL DELIVERED to {recipient}")
     except BaseException as e:
-        # Catching BaseException to prevent thread from ever killing the main process
-        print(f"THREAD ERROR: {str(e)}", file=sys.stderr)
+        logger.error(f"❌ Background thread: SMTP FAILED for {recipient}: {str(e)}")
+        # Log more details about the error type
+        import traceback
+        traceback.print_exc()
 
 def send_otp_email(user_doc):
     otp = generate_otp()
