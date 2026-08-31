@@ -2,10 +2,21 @@ import random
 import logging
 import threading
 import sys
+import socket
 from flask import current_app
 from flask_mail import Message
 from extensions import mail, db
 from datetime import datetime, timedelta
+
+# ====================================================================
+# NETWORK PATCH: Force IPv4 for Render compatibility
+# This fixes "OSError: [Errno 101] Network is unreachable"
+# ====================================================================
+orig_getaddrinfo = socket.getaddrinfo
+def getaddrinfo_ipv4(host, port, family=0, type=0, proto=0, flags=0):
+    return orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+socket.getaddrinfo = getaddrinfo_ipv4
+# ====================================================================
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
