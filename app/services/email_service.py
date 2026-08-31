@@ -2,6 +2,7 @@ import random
 import logging
 import threading
 import socket
+import smtplib
 from flask import current_app
 from flask_mail import Message
 from extensions import mail, db
@@ -22,14 +23,20 @@ logger = logging.getLogger(__name__)
 def generate_otp():
     return str(random.randint(100000, 999999))
 
-def send_async_email(app, msg, recipient, otp):
+def send_async_email(app, msg, recipient):
     with app.app_context():
         try:
-            logger.info(f"SMTP Thread: Connecting to Gmail for {recipient}...")
+            logger.info(f"🚀 SMTP: Starting direct SSL delivery to {recipient}...")
+            # Using a strict 20-second timeout to prevent worker hangs
+            socket.setdefaulttimeout(20)
+
             mail.send(msg)
-            logger.info(f"✅ SMTP SUCCESS: Mail sent to {recipient}")
+            logger.info(f"✅ SMTP SUCCESS: OTP delivered to {recipient}")
         except Exception as e:
-            logger.error(f"❌ SMTP FATAL ERROR: {str(e)}")
+            logger.error(f"❌ SMTP FAILED: {str(e)}")
+            # Log the specific error type to debug further
+            if "Network is unreachable" in str(e):
+                logger.error("DANGER: Render is still blocking outgoing mail ports.")
 
 def send_otp_email(user_doc):
     otp = generate_otp()
@@ -39,27 +46,27 @@ def send_otp_email(user_doc):
     if not recipient: return False, "No email"
 
     try:
-        # 1. Store in DB
+        # 1. Update Database
         db.users.update_one(
             {"email": recipient},
             {"$set": {"otp_code": otp, "otp_expiry": expiry}}
         )
 
-        # 2. Log for Developer (Rescue Mode stays as a backup)
-        logger.info(f"🔑 OTP GENERATED: {recipient} -> {otp}")
+        # 2. Rescue Log (Keep for your safety, but the goal is the inbox)
+        logger.info(f"🔑 [DEV LOG] OTP for {recipient}: {otp}")
 
-        # 3. Prepare Message
+        # 3. Create the message
         msg = Message(
-            subject=f"{otp} is your MoveMate verification code",
+            subject=f"Verification Code: {otp}",
             recipients=[recipient],
-            body=f"Your MoveMate verification code is: {otp}\n\nValid for 5 minutes."
+            body=f"Hello,\n\nYour MoveMate verification code is: {otp}\n\nThis code will expire in 5 minutes.\n\nIf you did not request this, please ignore this email."
         )
 
-        # 4. Background Delivery
+        # 4. Asynchronous Delivery
         app = current_app._get_current_object()
-        threading.Thread(target=send_async_email, args=(app, msg, recipient, otp)).start()
+        threading.Thread(target=send_async_email, args=(app, msg, recipient)).start()
 
         return True, None
     except Exception as e:
-        logger.error(f"SERVICE ERROR: {str(e)}")
+        logger.error(f"OTP SERVICE ERROR: {str(e)}")
         return True, "Fallback"
