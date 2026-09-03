@@ -15,9 +15,7 @@ def create_app():
     jwt.init_app(app)
     mail.init_app(app)
 
-    print(f"📧 MAIL SYSTEM: Sender set to {app.config.get('MAIL_DEFAULT_SENDER')}")
-
-    @app.after_request
+    # Initialize MongoDB
     def add_cors_headers(response):
         response.headers.add("Access-Control-Allow-Origin", "*")
         response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
