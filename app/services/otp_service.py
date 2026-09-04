@@ -85,10 +85,10 @@ class OTPService:
                 body=f"Your MoveMate verification code is: {code}" # Text fallback
             )
 
-            # Set a socket timeout to prevent hanging the whole request
-            socket.setdefaulttimeout(15)
+            # Set a longer socket timeout (30s) for slow cloud connections
+            socket.setdefaulttimeout(30)
 
-            logger.info(f"Attempting SMTP delivery to {recipient}...")
+            logger.info(f"Attempting SMTP delivery to {recipient} via Port 465...")
             mail.send(msg)
             logger.info(f"✅ OTP email delivered successfully to {recipient}")
             return True, None
