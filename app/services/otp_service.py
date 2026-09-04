@@ -1,15 +1,12 @@
 import random
 import logging
-import smtplib
-import socket
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import json
+import urllib.request
+import urllib.error
 from datetime import datetime, timedelta
 from extensions import db
 from flask import current_app
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class OTPService:
@@ -33,74 +30,79 @@ class OTPService:
     @staticmethod
     def send_professional_email(email, code):
         """
-        Sends a high-quality HTML email directly via SMTP.
-        Uses explicit socket handling to prevent Render timeouts.
+        Sends a professional HTML email via Resend API.
+        This uses HTTPS (Port 443) which is NEVER blocked by Render.
         """
-        try:
-            config = current_app.config
-            sender_email = config.get('MAIL_USERNAME')
-            sender_password = config.get('MAIL_PASSWORD')
+        api_key = current_app.config.get('RESEND_API_KEY') or "re_123" # Fallback
 
-            if not sender_email or not sender_password:
-                logger.error("Email credentials missing in environment variables.")
-                return False, "Server configuration error"
+        if not api_key:
+            logger.error("RESEND_API_KEY is missing in environment variables.")
+            return False, "Server API configuration error"
 
-            # 1. Create the Email Message (HTML)
-            message = MIMEMultipart("alternative")
-            message["Subject"] = f"{code} is your MoveMate verification code"
-            message["From"] = f"MoveMate <{config.get('MAIL_DEFAULT_SENDER')}>"
-            message["To"] = email
-
-            html_content = f"""
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 450px; margin: 40px auto; padding: 32px; border: 1px solid #eaeaea; border-radius: 12px; color: #000; background-color: #ffffff;">
-                <div style="margin-bottom: 24px;">
-                    <span style="font-size: 28px; font-weight: 900; color: #f97316;">▲</span>
-                    <span style="font-size: 24px; font-weight: 700; vertical-align: middle; margin-left: 8px; letter-spacing: -0.5px;">MoveMate</span>
-                </div>
-
-                <h2 style="font-size: 20px; font-weight: 600; margin: 0 0 12px 0; color: #111827;">Verify your identity</h2>
-                <p style="font-size: 14px; color: #666; margin: 0 0 24px 0; line-height: 1.6;">
-                    Use the verification code below to complete your sign-in request. This code is only valid for a short time.
-                </p>
-
-                <div style="background-color: #f6f6f6; border-radius: 8px; padding: 24px; text-align: center; margin-bottom: 24px; border: 1px solid #eee;">
-                    <span style="font-size: 38px; font-weight: 800; letter-spacing: 12px; color: #000; font-family: 'Courier New', Courier, monospace;">{code}</span>
-                </div>
-
-                <p style="font-size: 13px; color: #888; margin: 0 0 24px 0;">
-                    This code expires in <span style="color: #000; font-weight: 600;">5 minutes</span>.
-                </p>
-
-                <p style="font-size: 12px; color: #999; margin: 0; line-height: 1.5; border-top: 1px solid #eaeaea; padding-top: 24px;">
-                    If you didn't request this, you can safely ignore this email.<br>
-                    &copy; 2026 MoveMate Logistics. All rights reserved.
-                </p>
+        # Professional HTML Template (Matching Vercel/Google style)
+        html_content = f"""
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 450px; margin: 40px auto; padding: 32px; border: 1px solid #eaeaea; border-radius: 12px; color: #000; background-color: #ffffff;">
+            <div style="margin-bottom: 24px;">
+                <span style="font-size: 28px; font-weight: 900; color: #f97316;">▲</span>
+                <span style="font-size: 24px; font-weight: 700; vertical-align: middle; margin-left: 8px; letter-spacing: -0.5px;">MoveMate</span>
             </div>
-            """
 
-            message.attach(MIMEText(html_content, "html"))
+            <h2 style="font-size: 20px; font-weight: 600; margin: 0 0 12px 0; color: #111827;">Verify your identity</h2>
+            <p style="font-size: 14px; color: #666; margin: 0 0 24px 0; line-height: 1.6;">
+                Use the verification code below to complete your sign-in request. This code is only valid for a short time.
+            </p>
 
-            # 2. Connect and Send with precise socket control
-            # We force IPv4 and set a strict 15s timeout
-            logger.info(f"Connecting to {config.get('MAIL_SERVER')} for {email}...")
+            <div style="background-color: #f6f6f6; border-radius: 8px; padding: 24px; text-align: center; margin-bottom: 24px; border: 1px solid #eee;">
+                <span style="font-size: 38px; font-weight: 800; letter-spacing: 12px; color: #000; font-family: 'Courier New', Courier, monospace;">{code}</span>
+            </div>
 
-            # Using direct smtplib for better control than extensions
-            server = smtplib.SMTP(config.get('MAIL_SERVER'), config.get('MAIL_PORT'), timeout=15)
-            server.set_debuglevel(0)
-            server.starttls() # Secure the connection
-            server.login(sender_email, sender_password)
-            server.sendmail(sender_email, email, message.as_string())
-            server.quit()
+            <p style="font-size: 13px; color: #888; margin: 0 0 24px 0;">
+                This code expires in <span style="color: #000; font-weight: 600;">5 minutes</span>.
+            </p>
 
-            logger.info(f"✅ REAL EMAIL DELIVERED to {email}")
-            return True, None
+            <p style="font-size: 12px; color: #999; margin: 0; line-height: 1.5; border-top: 1px solid #eaeaea; padding-top: 24px;">
+                If you didn't request this, you can safely ignore this email.<br>
+                &copy; 2026 MoveMate Logistics. All rights reserved.
+            </p>
+        </div>
+        """
 
+        # Resend API Data
+        # Note: If you don't have a verified domain, Resend requires sending
+        # from 'onboarding@resend.dev' to your own email only.
+        data = {
+            "from": "MoveMate <onboarding@resend.dev>",
+            "to": [email],
+            "subject": f"{code} is your MoveMate verification code",
+            "html": html_content
+        }
+
+        try:
+            req = urllib.request.Request(
+                "https://api.resend.com/emails",
+                data=json.dumps(data).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                method="POST"
+            )
+
+            logger.info(f"API: Sending professional email to {email}...")
+            with urllib.request.urlopen(req, timeout=10) as response:
+                res_body = response.read().decode("utf-8")
+                logger.info(f"✅ API SUCCESS: Email delivered via Resend. ID: {res_body}")
+                return True, None
+
+        except urllib.error.HTTPError as e:
+            error_text = e.read().decode("utf-8")
+            logger.error(f"❌ API HTTP Error: {error_text}")
+            return False, error_text
         except Exception as e:
-            error_msg = str(e)
-            logger.error(f"❌ SMTP Fatal Error: {error_msg}")
-            # Fallback for internal developer reference
+            logger.error(f"❌ API Fatal Error: {str(e)}")
+            # Backup for safety
             logger.info(f"🔑 BACKUP LOG: OTP for {email} is [{code}]")
-            return False, error_msg
+            return False, str(e)
 
     @staticmethod
     def verify_code(email, code):

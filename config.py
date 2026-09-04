@@ -21,15 +21,10 @@ class Config:
 
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=7)
 
-    # --- Professional OTP & Mail Configuration ---
-    # We use Port 587 with STARTTLS as it's the industry standard for cloud stability
-    MAIL_SERVER = 'smtp.gmail.com'
-    MAIL_PORT = 587
-    MAIL_USE_TLS = True
-    MAIL_USE_SSL = False
-    MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
-    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
-    MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER", "noreplymovemate@gmail.com")
+    # --- API Based Email Configuration (Professional) ---
+    # This uses HTTPS (Port 443) which is NEVER blocked by Render/Cloud providers
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+    MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER", "onboarding@resend.dev")
 
     # Uploads Configuration
     UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
