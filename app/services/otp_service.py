@@ -83,7 +83,8 @@ class OTPService:
                 data=json.dumps(data).encode("utf-8"),
                 headers={
                     "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "User-Agent": "MoveMate-App/1.0"
                 },
                 method="POST"
             )
