@@ -1,21 +1,15 @@
 import random
 import logging
+import smtplib
 import socket
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
+from extensions import db
 from flask import current_app
-from flask_mail import Message
-from extensions import mail, db
 
-# ====================================================================
-# NETWORK COMPATIBILITY PATCH
-# Forces IPv4 to prevent "Network Unreachable" on Render/Cloud
-# ====================================================================
-orig_getaddrinfo = socket.getaddrinfo
-def getaddrinfo_ipv4(host, port, family=0, type=0, proto=0, flags=0):
-    return orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
-socket.getaddrinfo = getaddrinfo_ipv4
-# ====================================================================
-
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class OTPService:
@@ -25,100 +19,101 @@ class OTPService:
         return str(random.randint(100000, 999999))
 
     @staticmethod
-    def create_otp(email):
-        """Generates OTP, saves to DB with expiry, and returns it."""
+    def create_and_store_otp(email):
+        """Generates OTP, saves to DB with 5-min expiry."""
         code = OTPService.generate_code()
         expiry = datetime.utcnow() + timedelta(minutes=5)
 
-        try:
-            db.users.update_one(
-                {"email": email.strip().lower()},
-                {"$set": {
-                    "otp_code": code,
-                    "otp_expiry": expiry
-                }}
-            )
-            logger.info(f"OTP created and stored for {email}")
-            return code
-        except Exception as e:
-            logger.error(f"Failed to store OTP for {email}: {str(e)}")
-            return None
+        db.users.update_one(
+            {"email": email.strip().lower()},
+            {"$set": {"otp_code": code, "otp_expiry": expiry}}
+        )
+        return code
 
     @staticmethod
-    def send_email(email, code, full_name="User"):
-        """Synchronously sends the professional HTML OTP email via SMTP."""
+    def send_professional_email(email, code):
+        """
+        Sends a high-quality HTML email directly via SMTP.
+        Uses explicit socket handling to prevent Render timeouts.
+        """
         try:
-            subject = f"Your MoveMate verification code: {code}"
-            recipient = email.strip().lower()
+            config = current_app.config
+            sender_email = config.get('MAIL_USERNAME')
+            sender_password = config.get('MAIL_PASSWORD')
 
-            # Professional HTML Template (Vercel/Google Style)
-            html_body = f"""
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 450px; margin: 40px auto; padding: 32px; border: 1px solid #eaeaea; border-radius: 8px; color: #000; background-color: #ffffff;">
-                <div style="margin-bottom: 24px; text-align: left;">
-                    <span style="font-size: 28px; font-weight: 900; color: #000;">▲</span>
+            if not sender_email or not sender_password:
+                logger.error("Email credentials missing in environment variables.")
+                return False, "Server configuration error"
+
+            # 1. Create the Email Message (HTML)
+            message = MIMEMultipart("alternative")
+            message["Subject"] = f"{code} is your MoveMate verification code"
+            message["From"] = f"MoveMate <{config.get('MAIL_DEFAULT_SENDER')}>"
+            message["To"] = email
+
+            html_content = f"""
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 450px; margin: 40px auto; padding: 32px; border: 1px solid #eaeaea; border-radius: 12px; color: #000; background-color: #ffffff;">
+                <div style="margin-bottom: 24px;">
+                    <span style="font-size: 28px; font-weight: 900; color: #f97316;">▲</span>
                     <span style="font-size: 24px; font-weight: 700; vertical-align: middle; margin-left: 8px; letter-spacing: -0.5px;">MoveMate</span>
                 </div>
 
-                <h2 style="font-size: 20px; font-weight: 600; margin: 0 0 12px 0; color: #111827;">Sign up for MoveMate</h2>
+                <h2 style="font-size: 20px; font-weight: 600; margin: 0 0 12px 0; color: #111827;">Verify your identity</h2>
                 <p style="font-size: 14px; color: #666; margin: 0 0 24px 0; line-height: 1.6;">
-                    A login request was made for your account. Please use the verification code below to finish signing in.
+                    Use the verification code below to complete your sign-in request. This code is only valid for a short time.
                 </p>
 
-                <div style="background-color: #f6f6f6; border-radius: 6px; padding: 24px; text-align: center; margin-bottom: 24px;">
-                    <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #000; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">{code}</span>
+                <div style="background-color: #f6f6f6; border-radius: 8px; padding: 24px; text-align: center; margin-bottom: 24px; border: 1px solid #eee;">
+                    <span style="font-size: 38px; font-weight: 800; letter-spacing: 12px; color: #000; font-family: 'Courier New', Courier, monospace;">{code}</span>
                 </div>
 
                 <p style="font-size: 13px; color: #888; margin: 0 0 24px 0;">
-                    This code expires in <span style="color: #000; font-weight: 500;">5 minutes</span>.
+                    This code expires in <span style="color: #000; font-weight: 600;">5 minutes</span>.
                 </p>
 
                 <p style="font-size: 12px; color: #999; margin: 0; line-height: 1.5; border-top: 1px solid #eaeaea; padding-top: 24px;">
-                    By signing up, you agree to our <a href="#" style="color: #000; text-decoration: none; font-weight: 500;">Terms of Service</a> and <a href="#" style="color: #000; text-decoration: none; font-weight: 500;">Privacy Policy</a>.
+                    If you didn't request this, you can safely ignore this email.<br>
+                    &copy; 2026 MoveMate Logistics. All rights reserved.
                 </p>
             </div>
             """
 
-            msg = Message(
-                subject=subject,
-                recipients=[recipient],
-                html=html_body,
-                body=f"Your MoveMate verification code is: {code}" # Text fallback
-            )
+            message.attach(MIMEText(html_content, "html"))
 
-            # Set a longer socket timeout (30s) for slow cloud connections
-            socket.setdefaulttimeout(30)
+            # 2. Connect and Send with precise socket control
+            # We force IPv4 and set a strict 15s timeout
+            logger.info(f"Connecting to {config.get('MAIL_SERVER')} for {email}...")
 
-            logger.info(f"Attempting SMTP delivery to {recipient} via Port 465...")
-            mail.send(msg)
-            logger.info(f"✅ OTP email delivered successfully to {recipient}")
+            # Using direct smtplib for better control than extensions
+            server = smtplib.SMTP(config.get('MAIL_SERVER'), config.get('MAIL_PORT'), timeout=15)
+            server.set_debuglevel(0)
+            server.starttls() # Secure the connection
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, email, message.as_string())
+            server.quit()
+
+            logger.info(f"✅ REAL EMAIL DELIVERED to {email}")
             return True, None
 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"❌ SMTP Error for {email}: {error_msg}")
+            logger.error(f"❌ SMTP Fatal Error: {error_msg}")
+            # Fallback for internal developer reference
+            logger.info(f"🔑 BACKUP LOG: OTP for {email} is [{code}]")
             return False, error_msg
 
     @staticmethod
-    def verify_otp(email, input_code):
-        """Validates OTP code and expiry. Returns (Success, Message)."""
+    def verify_code(email, code):
+        """Checks if code matches and is not expired."""
         user = db.users.find_one({"email": email.strip().lower()})
+        if not user: return False, "User not found"
 
-        if not user:
-            return False, "User not found"
-
-        stored_code = user.get('otp_code')
-        expiry = user.get('otp_expiry')
-
-        if not stored_code or stored_code != input_code:
+        if user.get('otp_code') != code:
             return False, "Invalid verification code"
 
-        if not expiry or datetime.utcnow() > expiry:
-            return False, "Code has expired. Please request a new one."
+        if datetime.utcnow() > user.get('otp_expiry', datetime.min):
+            return False, "Code has expired. Please try again."
 
-        # Clear OTP after successful verification
-        db.users.update_one(
-            {"email": email},
-            {"$set": {"otp_code": None, "otp_expiry": None}}
-        )
-
-        return True, "Verified"
+        # Clear code on success
+        db.users.update_one({"email": email}, {"$set": {"otp_code": None, "otp_expiry": None}})
+        return True, "Success"

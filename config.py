@@ -21,14 +21,15 @@ class Config:
 
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=7)
 
-    # Mail Configuration (Final SMTP attempt for Port 465)
+    # --- Professional OTP & Mail Configuration ---
+    # We use Port 587 with STARTTLS as it's the industry standard for cloud stability
     MAIL_SERVER = 'smtp.gmail.com'
-    MAIL_PORT = 465
-    MAIL_USE_TLS = False
-    MAIL_USE_SSL = True
+    MAIL_PORT = 587
+    MAIL_USE_TLS = True
+    MAIL_USE_SSL = False
     MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
-    MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER")
+    MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER", "noreplymovemate@gmail.com")
 
     # Uploads Configuration
     UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')

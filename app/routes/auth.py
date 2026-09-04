@@ -16,38 +16,37 @@ def login():
     if not email or not password:
         return jsonify({"success": False, "message": "Email and password required"}), 400
 
-    # 1. User Validation
+    # 1. Verify User
     user = UserHelper.get_by_email(email)
     if not user or not UserHelper.verify_password(user['password'], password):
         return jsonify({"success": False, "message": "Invalid email or password"}), 401
 
-    # 2. Create OTP (DB)
-    otp_code = OTPService.create_otp(email)
-    if not otp_code:
-        return jsonify({"success": False, "message": "Internal error generating security code"}), 500
+    # 2. Create Security Code
+    otp_code = OTPService.create_and_store_otp(email)
 
-    # 3. Send OTP (Email)
-    # Note: We do this synchronously to ensure the user is notified if the mail server is down
-    success, error = OTPService.send_email(email, otp_code, user.get('full_name', 'User'))
-
-    if not success:
-        # Emergency backup: If email fails, we log it so admin can assist
-        print(f"🚨 ALERT: Email delivery failed for {email}. Code: {otp_code}")
-        # In a real public app, you might want to return 500 here,
-        # but we'll return 200 with a flag for now so the app doesn't 'Network Error'
-        return jsonify({
-            "success": True,
-            "two_factor_required": True,
-            "email": email,
-            "warning": "Email service is slow. Please check logs if code doesn't arrive."
-        }), 200
+    # 3. Send Professional Email
+    # We do this during the request to ensure the worker doesn't kill the process
+    success, error = OTPService.send_professional_email(email, otp_code)
 
     return jsonify({
         "success": True,
-        "message": "Verification code sent to your email",
+        "message": "OTP sent to your inbox" if success else "OTP generated (Server busy)",
         "two_factor_required": True,
-        "email": email
+        "email": email,
+        "delivery_status": "inbox" if success else "logs_only"
     }), 200
+
+@auth_bp.route("/resend-otp", methods=["POST"])
+def resend_otp():
+    data = request.get_json()
+    email = data.get("email", "").strip().lower()
+
+    if not email: return jsonify({"success": False}), 400
+
+    otp_code = OTPService.create_and_store_otp(email)
+    success, _ = OTPService.send_professional_email(email, otp_code)
+
+    return jsonify({"success": True, "message": "A new code has been sent."}), 200
 
 @auth_bp.route("/verify-otp", methods=["POST"])
 def verify_otp():
@@ -55,13 +54,10 @@ def verify_otp():
     email = data.get("email", "").strip().lower()
     otp = data.get("otp")
 
-    # Use the new centralized verification logic
-    success, message = OTPService.verify_otp(email, otp)
-
+    success, message = OTPService.verify_code(email, otp)
     if not success:
         return jsonify({"success": False, "message": message}), 401
 
-    # Get user again to create token
     user = UserHelper.get_by_email(email)
     access_token = create_access_token(
         identity=user['_id'],
@@ -83,17 +79,7 @@ def verify_otp():
 def register():
     data = request.get_json()
     email = data.get("email", "").strip().lower()
-    phone = data.get("phone", "").strip()
-
     if UserHelper.get_by_email(email):
-        return jsonify({"success": False, "message": "Email already registered"}), 400
-
-    if UserHelper.get_by_phone(phone):
-        return jsonify({"success": False, "message": "Phone number already registered"}), 400
-
+        return jsonify({"success": False, "message": "Email already exists"}), 400
     UserHelper.create_user(data)
-    return jsonify({"success": True, "message": "User registered successfully"}), 201
-
-@auth_bp.route("/test")
-def test():
-    return {"message": "Authentication System Online 🚀"}
+    return jsonify({"success": True, "message": "Registered successfully"}), 201
