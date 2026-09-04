@@ -33,11 +33,13 @@ class OTPService:
         Sends a professional HTML email via Resend API.
         This uses HTTPS (Port 443) which is NEVER blocked by Render.
         """
-        api_key = current_app.config.get('RESEND_API_KEY') or "re_123" # Fallback
+        api_key = current_app.config.get('RESEND_API_KEY')
 
-        if not api_key:
-            logger.error("RESEND_API_KEY is missing in environment variables.")
+        if not api_key or api_key == "re_123":
+            logger.error("❌ ERROR: RESEND_API_KEY is missing. Check your .env or Render Environment Variables.")
             return False, "Server API configuration error"
+
+        logger.info(f"API: Attempting to send email with key starting with: {api_key[:6]}...")
 
         # Professional HTML Template (Matching Vercel/Google style)
         html_content = f"""

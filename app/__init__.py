@@ -30,6 +30,14 @@ def create_app():
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
 
+    # Log Email Config Status
+    with app.app_context():
+        key = app.config.get('RESEND_API_KEY')
+        if key:
+            print(f"📧 EMAIL CONFIG: Resend Key detected (Starts with: {key[:6]})")
+        else:
+            print("📧 EMAIL CONFIG: ❌ MISSING RESEND_API_KEY")
+
     # Root route for health check
     @app.route("/")
     def home():
