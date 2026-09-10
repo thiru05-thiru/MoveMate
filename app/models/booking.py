@@ -6,7 +6,7 @@ class BookingHelper:
     @staticmethod
     def create(customer_id, data, nearest_driver=None):
         booking_doc = {
-            "booking_id": f"MM{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "booking_id": f"ZV{datetime.now().strftime('%Y%m%d%H%M%S')}",
             "customer_id": customer_id,
             "pickup_address": data['pickup_address'],
             "destination_address": data['destination_address'],

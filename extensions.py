@@ -27,9 +27,11 @@ class MongoDBProxy:
 db = MongoDBProxy()
 
 def init_mongodb(app):
-    uri = os.getenv("MONGODB_URI")
+    # Use app config or env fallback
+    uri = app.config.get("MONGODB_URI") or os.getenv("MONGODB_URI")
+
     if not uri:
-        print("CRITICAL: MONGODB_URI missing!")
+        print("CRITICAL ERROR: MONGODB_URI is not set in .env or Config!")
         return
 
     try:
@@ -41,15 +43,17 @@ def init_mongodb(app):
             socketTimeoutMS=15000,
             tlsAllowInvalidCertificates=True
         )
+
         # Verify connection immediately
         client.admin.command('ping')
 
-        # Get DB name from URI or fallback
-        database = client.get_default_database("movemate_db")
+        # Get DB name from URI (e.g. zoventra-main) or fallback
+        # This handles the appName parameter correctly
+        database = client.get_default_database()
 
         db.client = client
         db.set_db(database)
 
-        print(f"✅ MONGODB CONNECTED: {database.name}")
+        print(f"✅ MONGODB CONNECTED TO: {database.name}")
     except Exception as e:
-        print(f"❌ MONGODB ERROR: {str(e)}")
+        print(f"❌ MONGODB CONNECTION FAILED: {str(e)}")

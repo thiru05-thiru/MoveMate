@@ -41,31 +41,35 @@ class OTPService:
 
         logger.info(f"API: Attempting to send email with key starting with: {api_key[:6]}...")
 
-        # Professional HTML Template (Matching Vercel/Google style)
+        # Professional HTML Template (Luxury Teal & Rose Gold Theme)
         html_content = f"""
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 450px; margin: 40px auto; padding: 32px; border: 1px solid #eaeaea; border-radius: 12px; color: #000; background-color: #ffffff;">
-            <div style="margin-bottom: 24px;">
-                <span style="font-size: 28px; font-weight: 900; color: #f97316;">▲</span>
-                <span style="font-size: 24px; font-weight: 700; vertical-align: middle; margin-left: 8px; letter-spacing: -0.5px;">MoveMate</span>
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 450px; margin: 40px auto; padding: 40px; border: 1px solid #eaeaea; border-radius: 20px; color: #000; background-color: #ffffff; box-shadow: 0 10px 30px rgba(0,0,0,0.05);">
+            <div style="margin-bottom: 32px; text-align: center;">
+                <div style="width: 50px; height: 50px; background-color: #0f766e; border-radius: 12px; display: inline-block; line-height: 50px; text-align: center;">
+                    <span style="color: #d9a08b; font-size: 24px; font-weight: 900;">Z</span>
+                </div>
+                <div style="font-size: 20px; font-weight: 900; color: #0f766e; margin-top: 12px; text-transform: uppercase; letter-spacing: 2px;">Zoventra Supreme</div>
             </div>
 
-            <h2 style="font-size: 20px; font-weight: 600; margin: 0 0 12px 0; color: #111827;">Verify your identity</h2>
-            <p style="font-size: 14px; color: #666; margin: 0 0 24px 0; line-height: 1.6;">
-                Use the verification code below to complete your sign-in request. This code is only valid for a short time.
+            <h2 style="font-size: 22px; font-weight: 700; margin: 0 0 16px 0; color: #111827; text-align: center;">Identity Verification</h2>
+            <p style="font-size: 14px; color: #64748b; margin: 0 0 32px 0; line-height: 1.6; text-align: center;">
+                A sign-in attempt requires a secure terminal key. Please use the authorization code below.
             </p>
 
-            <div style="background-color: #f6f6f6; border-radius: 8px; padding: 24px; text-align: center; margin-bottom: 24px; border: 1px solid #eee;">
-                <span style="font-size: 38px; font-weight: 800; letter-spacing: 12px; color: #000; font-family: 'Courier New', Courier, monospace;">{code}</span>
+            <div style="background-color: #f8fafc; border-radius: 16px; padding: 32px; text-align: center; margin-bottom: 32px; border: 1px solid #f1f5f9;">
+                <span style="font-size: 42px; font-weight: 900; letter-spacing: 15px; color: #0f766e; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">{code}</span>
             </div>
 
-            <p style="font-size: 13px; color: #888; margin: 0 0 24px 0;">
-                This code expires in <span style="color: #000; font-weight: 600;">5 minutes</span>.
+            <p style="font-size: 13px; color: #94a3b8; margin: 0 0 24px 0; text-align: center;">
+                Valid for <span style="color: #0f766e; font-weight: 700;">5 minutes</span>. Secured by Zoventra Supreme Protocol.
             </p>
 
-            <p style="font-size: 12px; color: #999; margin: 0; line-height: 1.5; border-top: 1px solid #eaeaea; padding-top: 24px;">
-                If you didn't request this, you can safely ignore this email.<br>
-                &copy; 2026 MoveMate Logistics. All rights reserved.
-            </p>
+            <div style="border-top: 1px solid #f1f5f9; padding-top: 24px; text-align: center;">
+                <p style="font-size: 11px; color: #cbd5e1; margin: 0; line-height: 1.5; text-transform: uppercase; letter-spacing: 1px;">
+                    &copy; 2026 Zoventra Supreme Logistics<br>
+                    Global Command Center • Bangalore, India
+                </p>
+            </div>
         </div>
         """
 
@@ -73,9 +77,9 @@ class OTPService:
         # Note: If you don't have a verified domain, Resend requires sending
         # from 'onboarding@resend.dev' to your own email only.
         data = {
-            "from": "MoveMate <onboarding@resend.dev>",
+            "from": "Zoventra <onboarding@resend.dev>",
             "to": [email],
-            "subject": f"{code} is your MoveMate verification code",
+            "subject": f"{code} is your Zoventra verification code",
             "html": html_content
         }
 
@@ -86,7 +90,7 @@ class OTPService:
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
-                    "User-Agent": "MoveMate-App/1.0"
+                    "User-Agent": "Zoventra-App/1.0"
                 },
                 method="POST"
             )

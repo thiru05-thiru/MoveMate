@@ -10,17 +10,17 @@ class UserHelper:
     """
     @staticmethod
     def create_user(data):
-        hashed_password = generate_password_hash(data['password'])
+        hashed_password = generate_password_hash(data.get('password', 'default_password'))
         role = data.get('role', 'customer')
 
         user_doc = {
-            "full_name": data['full_name'],
-            "email": data['email'],
-            "phone": data['phone'],
+            "full_name": data.get('full_name', 'Unnamed User'),
+            "email": data.get('email'),
+            "phone": data.get('phone', ''),
             "password": hashed_password,
             "role": role,
             "profile_photo": None,
-            "location": data.get('location', 'Bangalore, Karnataka'),
+            "location": data.get('location', 'Bangalore, India'),
             "otp_code": None,
             "otp_expiry": None,
             "created_at": datetime.utcnow()

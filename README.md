@@ -1,6 +1,6 @@
-# 🚚 MoveMate - Logistics & Goods Transportation Platform
+# 🚚 Zoventra - Logistics & Goods Transportation Platform
 
-MoveMate is a logistics platform that connects customers with nearby drivers to transport household items, office equipment, parcels, and commercial goods. It is built using Flask and follows a clean REST API architecture.
+Zoventra is a logistics platform that connects customers with nearby drivers to transport household items, office equipment, parcels, and commercial goods. It is built using Flask and follows a clean REST API architecture.
 
 ## ✨ Features
 

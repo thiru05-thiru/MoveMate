@@ -9,13 +9,14 @@ def create_app():
 
     # Move CORS to the absolute top of the initialization
     from flask_cors import CORS
-    CORS(app, resources={r"/*": {"origins": "*"}})
+    CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
     # Apply Extensions
     jwt.init_app(app)
     mail.init_app(app)
 
-    # Initialize MongoDB
+    # CORS Header Fix for Preflight (OPTIONS) requests
+    @app.after_request
     def add_cors_headers(response):
         response.headers.add("Access-Control-Allow-Origin", "*")
         response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
@@ -38,13 +39,29 @@ def create_app():
         else:
             print("📧 EMAIL CONFIG: ❌ MISSING RESEND_API_KEY")
 
-    # Root route for health check
+    # Enhanced Root route for diagnostics
     @app.route("/")
     def home():
+        db_connected = False
+        db_name = "N/A"
+        try:
+            if db.client:
+                db.client.admin.command('ping')
+                db_connected = True
+                db_name = db.name
+        except:
+            pass
+
         return jsonify({
-            "project": "MoveMate",
-            "status": "Backend Running Successfully 🚀",
-            "version": "2.0"
+            "project": "Zoventra Supreme",
+            "status": "Online 🛰️",
+            "database": {
+                "connected": db_connected,
+                "name": db_name,
+                "uri_detected": bool(app.config.get('MONGODB_URI'))
+            },
+            "environment": os.environ.get("FLASK_ENV", "development"),
+            "version": "2.1"
         }), 200
 
     # Global Error Handler to ensure CORS is always sent
