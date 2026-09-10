@@ -18,6 +18,12 @@ class MongoDBProxy:
 
     def __getattr__(self, name):
         if self._db is None:
+            # Re-attempt lazy initialization if possible
+            from flask import current_app
+            if current_app:
+                init_mongodb(current_app)
+
+        if self._db is None:
             raise RuntimeError("Database connection not ready. Check MONGODB_URI.")
         return getattr(self._db, name)
 

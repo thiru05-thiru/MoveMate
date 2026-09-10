@@ -23,9 +23,8 @@ def create_app():
         response.headers.add("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS")
         return response
 
-    # Initialize MongoDB
-    with app.app_context():
-        init_mongodb(app)
+    # Initialize MongoDB immediately
+    init_mongodb(app)
 
     # Ensure upload folder exists
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
