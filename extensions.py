@@ -40,21 +40,26 @@ def init_mongodb(app):
         print("CRITICAL ERROR: MONGODB_URI is not set in .env or Config!")
         return
 
+    # Clean the URI - sometimes quotes or spaces get added in cloud envs
+    uri = uri.strip().strip("'").strip('"')
+
     try:
+        print(f"🛰️ ATTEMPTING MONGODB CONNECTION...")
+
         # Optimized connection for Render and Atlas
         client = MongoClient(
             uri,
-            serverSelectionTimeoutMS=15000,
-            connectTimeoutMS=15000,
-            socketTimeoutMS=15000,
-            tlsAllowInvalidCertificates=True
+            serverSelectionTimeoutMS=20000,
+            connectTimeoutMS=20000,
+            socketTimeoutMS=20000,
+            tlsAllowInvalidCertificates=True,
+            retryWrites=True
         )
 
         # Verify connection immediately
         client.admin.command('ping')
 
         # Get DB name from URI (e.g. zoventra-main) or fallback
-        # This handles the appName parameter correctly
         database = client.get_default_database()
 
         db.client = client
@@ -63,3 +68,5 @@ def init_mongodb(app):
         print(f"✅ MONGODB CONNECTED TO: {database.name}")
     except Exception as e:
         print(f"❌ MONGODB CONNECTION FAILED: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
