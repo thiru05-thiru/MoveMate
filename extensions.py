@@ -3,11 +3,13 @@ from flask_cors import CORS
 from flask_mail import Mail
 from pymongo import MongoClient
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Initialize Extensions
 jwt = JWTManager()
 mail = Mail()
-# We define CORS but we'll apply it fully in __init__.py
 cors = CORS()
 
 # MongoDB Proxy to handle cloud connection state
@@ -15,10 +17,10 @@ class MongoDBProxy:
     def __init__(self):
         self._db = None
         self.client = None
+        self.name = "N/A"
 
     def __getattr__(self, name):
         if self._db is None:
-            # Re-attempt lazy initialization if possible
             from flask import current_app
             if current_app:
                 init_mongodb(current_app)
@@ -29,38 +31,45 @@ class MongoDBProxy:
 
     def set_db(self, database):
         self._db = database
+        if database:
+            self.name = database.name
 
 db = MongoDBProxy()
 
 def init_mongodb(app):
-    # Use app config or env fallback
     uri = app.config.get("MONGODB_URI") or os.getenv("MONGODB_URI")
 
     if not uri:
-        print("CRITICAL ERROR: MONGODB_URI is not set in .env or Config!")
+        print("CRITICAL ERROR: MONGODB_URI is not set!")
         return
 
-    # Clean the URI - sometimes quotes or spaces get added in cloud envs
     uri = uri.strip().strip("'").strip('"')
 
     try:
         print(f"🛰️ ATTEMPTING MONGODB CONNECTION...")
 
-        # Optimized connection for Render and Atlas
+        # Use certifi for secure SSL connection on cloud platforms like Render
+        import certifi
+        ca = certifi.where()
+
         client = MongoClient(
             uri,
             serverSelectionTimeoutMS=20000,
-            connectTimeoutMS=20000,
-            socketTimeoutMS=20000,
-            tlsAllowInvalidCertificates=True,
+            tlsCAFile=ca,
+            tls=True,
             retryWrites=True
         )
 
-        # Verify connection immediately
+        # 1. Verify connection
         client.admin.command('ping')
 
-        # Get DB name from URI (e.g. zoventra-main) or fallback
-        database = client.get_default_database()
+        # 2. Get Database Name
+        # Fallback to zoventra_supreme for the new clean start
+        try:
+            database = client.get_default_database()
+        except:
+            # Manually fallback if the URI doesn't have a /db-name
+            database = client.get_database("zoventra_supreme")
 
         db.client = client
         db.set_db(database)
@@ -68,5 +77,5 @@ def init_mongodb(app):
         print(f"✅ MONGODB CONNECTED TO: {database.name}")
     except Exception as e:
         print(f"❌ MONGODB CONNECTION FAILED: {str(e)}")
-        import traceback
-        print(traceback.format_exc())
+        # We don't raise the error here to allow the Flask app to still boot
+        # and provide diagnostic info via the root route.
