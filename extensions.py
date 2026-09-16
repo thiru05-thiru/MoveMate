@@ -46,17 +46,20 @@ def init_mongodb(app):
     uri = uri.strip().strip("'").strip('"')
 
     try:
-        print(f"🛰️ ATTEMPTING MONGODB CONNECTION...")
+        print(f"🛰️ ATTEMPTING MONGODB CONNECTION (Cloud Optimized)...")
 
         # Connection options that work across Local, Render, and Atlas
+        # connect=False is crucial for multi-process environments like Render
         client = MongoClient(
             uri,
             serverSelectionTimeoutMS=20000,
-            tlsAllowInvalidCertificates=True, # Often needed for cloud environments
-            retryWrites=True
+            tls=True,
+            tlsAllowInvalidCertificates=True,
+            retryWrites=True,
+            connect=False
         )
 
-        # 1. Verify connection
+        # Trigger connection
         client.admin.command('ping')
 
         # 2. Get Database Name
