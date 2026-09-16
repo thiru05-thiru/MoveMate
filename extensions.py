@@ -31,7 +31,7 @@ class MongoDBProxy:
 
     def set_db(self, database):
         self._db = database
-        if database:
+        if database is not None:
             self.name = database.name
 
 db = MongoDBProxy()
@@ -48,15 +48,11 @@ def init_mongodb(app):
     try:
         print(f"🛰️ ATTEMPTING MONGODB CONNECTION...")
 
-        # Use certifi for secure SSL connection on cloud platforms like Render
-        import certifi
-        ca = certifi.where()
-
+        # Connection options that work across Local, Render, and Atlas
         client = MongoClient(
             uri,
             serverSelectionTimeoutMS=20000,
-            tlsCAFile=ca,
-            tls=True,
+            tlsAllowInvalidCertificates=True, # Often needed for cloud environments
             retryWrites=True
         )
 
@@ -68,7 +64,6 @@ def init_mongodb(app):
         try:
             database = client.get_default_database()
         except:
-            # Manually fallback if the URI doesn't have a /db-name
             database = client.get_database("zoventra_supreme")
 
         db.client = client
